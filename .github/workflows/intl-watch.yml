@@ -1,0 +1,28 @@
+name: intl-watch
+# vegas.hu and Tippmix Pro prices for four European leagues (ACB, GEOB, DBBF, CBFFE) into R2 odds/{vegas,tippmix}/intl-latest.json.gz
+# plus a per-day history. Read only, nothing is bet. Started every 2 hours by a Cloudflare Worker (workflow_dispatch).
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: intl-watch
+  cancel-in-progress: false
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      CHROME_PATH: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci --prefix pipeline --no-audit --no-fund
+        env: { PUPPETEER_SKIP_DOWNLOAD: 'true' }
+      - run: node pipeline/vegas-intl-read.js --r2
+      - run: node pipeline/tippmix-intl-read.mjs --r2
+        if: ${{ !cancelled() }}

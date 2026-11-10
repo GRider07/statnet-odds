@@ -1,0 +1,32 @@
+name: nba-watch
+# vegas.hu, Tippmix Pro and Polymarket NBA prices, one read, into R2 odds/{vegas,tippmix,polymarket}/nba-latest.json.gz plus
+# a per-day history (odds/.../nba/<UTC date>.json.gz). Read only, nothing is bet. Started hourly through the NBA evening by
+# a Cloudflare Worker (workflow_dispatch): GitHub's own cron skipped most runs.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nba-watch
+  cancel-in-progress: false
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      CHROME_PATH: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci --prefix pipeline --no-audit --no-fund
+        env: { PUPPETEER_SKIP_DOWNLOAD: 'true' }
+      - run: node pipeline/vegas-nba-read.js --r2
+      # a failure in one book must not hide the others; a Tippmix 403 fails that step only (stop there, do not route around it)
+      - run: node pipeline/tippmix-nba-read.mjs --r2
+        if: ${{ !cancelled() }}
+      - run: node pipeline/polymarket-nba-read.js --r2
+        if: ${{ !cancelled() }}
