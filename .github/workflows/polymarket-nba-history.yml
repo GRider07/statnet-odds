@@ -1,0 +1,21 @@
+name: polymarket-nba-history
+# One-off pull of NBA moneyline minute prices from Polymarket (its CLOB refuses Hungarian connections).
+on:
+  workflow_dispatch:
+    inputs:
+      from: { default: '2025-10-01' }
+      to: { default: '2026-04-20' }
+permissions:
+  contents: read
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: pipeline/polymarket-nba-history.js, sparse-checkout-cone-mode: false }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node pipeline/polymarket-nba-history.js --from=${{ inputs.from }} --to=${{ inputs.to }} --out=poly-nba.json.gz
+      - uses: actions/upload-artifact@v4
+        with: { name: poly-nba, path: poly-nba.json.gz, retention-days: 14 }

@@ -1,0 +1,20 @@
+name: polymarket-nba-title-history
+# One-off pull of the price paths of Polymarket's NBA Champion markets (its CLOB refuses Hungarian connections).
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: pipeline/polymarket-nba-title-history.js, sparse-checkout-cone-mode: false }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node pipeline/polymarket-nba-title-history.js --out=poly-nba-title.json.gz
+        timeout-minutes: 25
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: poly-nba-title, path: poly-nba-title.json.gz, retention-days: 14 }
