@@ -1,4 +1,4 @@
-// pipeline/tippmix-nba-read.mjs — read Tippmix Pro's NBA prices once. Not a Worker: the vegas-nba-watch GitHub
+// pipeline/tippmix-nba-read.mjs — read Tippmix Pro's NBA prices once. Not a Worker: the nba-watch GitHub (public repo statnet-odds)
 // workflow runs it every 30 min with --r2 (R2 odds/tippmix/nba-latest.json.gz + per-day history odds/tippmix/nba/<date>).
 //
 // node pipeline/tippmix-nba-read.mjs [--list] [--r2]      (--list: only print the basketball tournaments Pro offers)

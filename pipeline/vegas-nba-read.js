@@ -6,7 +6,7 @@
 //   node pipeline/vegas-nba-read.js [--r2]
 //
 // Saves pipeline-cache/nba-oracle/vegas-nba/<UTC time>.json: { at, games: [[start MM-DDTHH:MM, home, away, ml[h,a], hc[homeLine,h,a]]] }
-// (raw API prices; nba-full-model.js rounds them down to the 2-decimal display price). --r2 (the scheduled GitHub run)
+// (raw API prices; 6th element = the whole handicap ladder [[homeLine, home, away], ...] for games starting within 36 h, null further out; nba-full-model.js rounds them down to the 2-decimal display price). --r2 (the scheduled GitHub run)
 // also writes R2 odds/vegas/nba-latest.json.gz and appends the read to odds/vegas/nba/<UTC date>.json.gz (price history).
 'use strict';
 const fs = require('fs'), path = require('path'), zlib = require('zlib'), os = require('os');
@@ -16,15 +16,35 @@ const FEED = 'https://hu-sb2frontend-altenar2.biahosted.com/api/widget/GetEvents
 const OUT = path.join(__dirname, '..', 'pipeline-cache', 'nba-oracle', 'vegas-nba');
 
 // pure: Altenar GetEvents JSON -> snapshot rows (typeId 219 winner, 223 handicap, main line = the market holding the isMB odd)
-function rows(j) {
+function rows(j, lad = new Map()) {
   const mk = new Map(j.markets.map((m) => [m.id, m])), od = new Map(j.odds.map((o) => [o.id, o]));
   const px = (m) => m.oddIds.map((i) => od.get(i).price);
   return j.events.filter((e) => e.status === 0 && / vs\. /.test(e.name)).map((e) => {
     const ms = e.marketIds.map((i) => mk.get(i)).filter(Boolean), w = ms.find((m) => m.typeId === 219);
     const hs = ms.filter((m) => m.typeId === 223), h = hs.find((m) => m.oddIds.some((i) => (od.get(i) || {}).isMB)) || hs[0];
     const [home, away] = e.name.split(' vs. ');
-    return [e.startDate.slice(5, 16), home, away, w ? px(w) : null, h ? [+h.sv, ...px(h)] : null];
+    return [e.startDate.slice(5, 16), home, away, w ? px(w) : null, h ? [+h.sv, ...px(h)] : null, lad.get(e.id) || null];
   });
+}
+
+// pure: one GetEventDetails JSON -> [[homeLine, homePrice, awayPrice], ...] sorted by line (the site's "+169" panel; the list feed
+// carries only the main line). Market typeId 223 desktopOddIds = [home column, away column]; every odd's sv is the HOME line for both sides.
+function ladder(d) {
+  const od = new Map(d.odds.map((o) => [o.id, o])), mk = d.markets.find((m) => m.typeId === 223 && m.desktopOddIds);
+  if (!mk) return null;
+  const [H, A] = mk.desktopOddIds.map((c) => c.map((i) => od.get(i)).filter((o) => o && o.sv != null)), out = [];
+  for (const o of H) { const a = A.find((x) => +x.sv === +o.sv); if (a) out.push([+o.sv, o.price, a.price]); }
+  return out.length ? out.sort((x, y) => x[0] - y[0]) : null;
+}
+const DETAIL = FEED.replace('GetEvents', 'GetEventDetails').split('&eventCount')[0];   // same query string the page uses, minus the list filters
+// inside the page: the ladder of every game starting within `hours` h (one call each; a failed call leaves that game on its main line)
+async function ladders(page, j, hours = 36) {
+  const out = new Map();
+  for (const e of j.events.filter((e) => e.status === 0 && / vs. /.test(e.name) && Date.parse(e.startDate) - Date.now() < hours * 36e5)) {
+    const r = await page.evaluate(async (u) => { try { const x = await fetch(u); return x.status === 200 ? await x.json() : null; } catch (_) { return null; } }, `${DETAIL}&eventId=${e.id}`);
+    const l = r && ladder(r); if (l) out.set(e.id, l);
+  }
+  return out;
 }
 
 async function read() {
@@ -34,7 +54,9 @@ async function read() {
     await page.goto('https://vegas.hu/sports', { waitUntil: 'networkidle2', timeout: 60000 });
     const r = await page.evaluate(async (u) => { const x = await fetch(u); return { status: x.status, body: await x.text() }; }, FEED);
     if (r.status !== 200) throw new Error(`Vegas feed answered HTTP ${r.status} from inside the page: ${r.body.slice(0, 200)}`);
-    return JSON.parse(r.body);
+    const j = JSON.parse(r.body);
+    j.ladders = await ladders(page, j);
+    return j;
   } finally { await browser.close(); }
 }
 
@@ -53,7 +75,7 @@ async function toR2(snap, prefix = 'odds/vegas/nba') {
 }
 
 if (require.main === module) (async () => {
-  const j = await read(), games = rows(j), at = new Date().toISOString();
+  const j = await read(), games = rows(j, j.ladders), at = new Date().toISOString();
   if (!games.length) throw new Error(`0 NBA games parsed from ${j.events.length} events: the feed or its shape changed`);   // parsers must scream on zero
   const snap = { at, games };
   fs.mkdirSync(OUT, { recursive: true });
@@ -63,4 +85,4 @@ if (require.main === module) (async () => {
   if (process.argv.includes('--r2')) await toR2(snap);
 })().catch((e) => { console.error('FAILED: ' + e.message); process.exit(1); });
 
-module.exports = { rows, toR2 };
+module.exports = { rows, toR2, ladder, ladders };

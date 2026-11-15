@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { readProMarkets } from '../odds-watcher/src/pro.js';
+import { readProMarkets, readProLive } from '../odds-watcher/src/pro.js';
 
 const HOST = 'sportsapi.tippmixpro.hu', ORIGIN = 'https://sports2.tippmixpro.hu', REALM = 'www.tippmixpro.hu', OP = 2901;
 const UA = 'StatNet research (foreign-league prices for model comparison, read on command)';
@@ -58,7 +58,8 @@ export async function readIntl() {
       for (const m of recs.filter((x) => x._type === 'MATCH' && (x.statusId === '1' || x.statusId === '2'))) {
         await sleep(GAP_MS);
         const px = readProMarkets(await s.dump(`/sports/${OP}/hu/${m.id}/match-odds/market-group/Nepszeru`), m);
-        leagues[code].push({ proId: m.id, start: new Date(m.startTime).toISOString(), live: m.statusId === '2', home: m.homeParticipantName, away: m.awayParticipantName, ml: px.ml, ml1: px.ml1, hc: px.hc, tot: px.tot });
+        const lv = m.statusId === '2' ? readProLive(recs, m) : null;   // score "home:away" + quarter, from the same overview dump
+        leagues[code].push({ proId: m.id, start: new Date(m.startTime).toISOString(), live: m.statusId === '2', sc: lv && lv.sc, st: lv && lv.st, home: m.homeParticipantName, away: m.awayParticipantName, ml: px.ml, ml1: px.ml1, hc: px.hc, tot: px.tot });
       }
     }
     return leagues;

@@ -7,7 +7,7 @@
 'use strict';
 const fs = require('fs'), path = require('path'), zlib = require('zlib'), os = require('os');
 const puppeteer = require('puppeteer-core');
-const { rows } = require('./vegas-nba-read.js');
+const { rows, ladders } = require('./vegas-nba-read.js');
 const CHROME = process.env.CHROME_PATH || (process.platform === 'win32' ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : '/usr/bin/google-chrome');
 const CHAMPS = { ACB: 3009, GEOB: 4480, DBBF: 3017, CBFFE: 3068 };   // GEOB = Georgian Superleague (Batumi, Kutaisi...), NOT Greece (2982)
 const feed = (id) => `https://hu-sb2frontend-altenar2.biahosted.com/api/widget/GetEvents?culture=hu-HU&timezoneOffset=-60&integration=vegashu2&deviceType=1&numFormat=hu-HU&countryCode=HU&eventCount=0&sportId=0&champIds=${id}`;
@@ -22,9 +22,17 @@ async function read() {
     for (const [code, id] of Object.entries(CHAMPS)) {
       const r = await page.evaluate(async (u) => { const x = await fetch(u); return { status: x.status, body: await x.text() }; }, feed(id));
       if (r.status !== 200) throw new Error(`${code}: Vegas feed answered HTTP ${r.status}: ${r.body.slice(0, 200)}`);
-      out[code] = rows(JSON.parse(r.body));
+      const j = JSON.parse(r.body);
+      out[code] = rows(j, await ladders(page, j));
     }
-    return out;
+    // games in play: one basketball live feed; the list feed above no longer carries them. score [home, away], ls = "1. negyed"
+    const lr = await page.evaluate(async (u) => { const x = await fetch(u); return { status: x.status, body: await x.text() }; }, feed(0).replace('GetEvents', 'GetLiveEvents').replace(/&eventCount=0&sportId=0&champIds=0/, '&sportId=67'));
+    const live = {};
+    if (lr.status === 200) for (const e of JSON.parse(lr.body).events || []) {
+      const code = Object.keys(CHAMPS).find((c) => CHAMPS[c] === e.champId), [home, away] = String(e.name).split(' vs. ');
+      if (code && away && Array.isArray(e.score)) (live[code] = live[code] || []).push({ start: e.startDate, home, away, sc: e.score.length === 2 ? e.score : null, st: (/^(\d)\./.exec(e.liveTime || '') || [])[1] ? `${/^(\d)\./.exec(e.liveTime)[1]}q` : e.liveTime || null });
+    }
+    return { out, live };
   } finally { await browser.close(); }
 }
 
@@ -44,11 +52,11 @@ async function toR2(snap, base = 'odds/vegas/intl') {   // also used by tippmix-
 module.exports = { toR2 };
 
 if (require.main === module) (async () => {
-  const leagues = await read(), at = new Date().toISOString();
+  const { out: leagues, live } = await read(), at = new Date().toISOString();
   const total = Object.values(leagues).reduce((s, l) => s + l.length, 0);
   console.log(Object.entries(leagues).map(([c, l]) => `${c} ${l.length}`).join(', '));
   if (!total) throw new Error('0 games parsed in all four leagues: the feed or its shape changed');   // parsers must scream on zero (an empty league alone can be an off-week)
-  const snap = { at, leagues };
+  const snap = { at, leagues, live };
   fs.mkdirSync(OUT, { recursive: true });
   fs.writeFileSync(path.join(OUT, at.replace(/[:.]/g, '-') + '.json'), JSON.stringify(snap));
   if (process.argv.includes('--r2')) await toR2(snap);

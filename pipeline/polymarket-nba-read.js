@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// polymarket-nba-read.js — the SHARP side of the same-moment price log:
-// Polymarket's NBA game moneylines, read in the same GitHub run as Vegas and Tippmix (nba-watch.yml), so each soft
+// polymarket-nba-read.js — the SHARP side of the same-moment price log (improvement 1, pipeline/league-betting/journey.md part 3):
+// Polymarket's NBA game moneylines, read in the same GitHub run as Vegas and Tippmix (nba-watch.yml in the public repo statnet-odds), so each soft
 // book price has a sharp fair price taken minutes apart. gamma-api answers from Hungary and GitHub; no login, no headers.
 //
 //   node pipeline/polymarket-nba-read.js [--r2]     --r2: odds/polymarket/nba-latest.json.gz + odds/polymarket/nba/<date>.json.gz

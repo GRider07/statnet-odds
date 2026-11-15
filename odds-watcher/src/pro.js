@@ -42,3 +42,18 @@ export function readProMarkets(recs, m) {
   o.hc.sort((a, b) => a[0] - b[0]); o.tot.sort((a, b) => a[0] - b[0]);
   return o;
 }
+
+const PART = { 65: '1q', 66: '2q', 67: '3q', 68: '4q' };
+// a live match's state: the classic site's st (period) / sc ("home:away") / pt (Pro has no game clock: null)
+export function readProLive(recs, m) {
+  const T = byType(recs);
+  const mm = (T.MATCH || []).find((x) => x.id === m.id) || m;
+  const score = (T.EVENT_INFO || []).find((x) => x.eventId === m.id && x.typeId === '1' && x.eventPartId === '60');
+  let sc = null;
+  if (score) {
+    const pts = { [score.paramParticipantId1]: score.paramFloat1, [score.paramParticipantId2]: score.paramFloat2 };
+    if (pts[m.homeParticipantId] != null && pts[m.awayParticipantId] != null) sc = `${pts[m.homeParticipantId]}:${pts[m.awayParticipantId]}`;
+  }
+  return { st: PART[mm.currentPartId] || mm.shortCurrentPartName || mm.currentPartName || null, sc, pt: null };
+}
+

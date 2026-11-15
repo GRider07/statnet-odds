@@ -24,6 +24,10 @@ jobs:
         with: { node-version: 22 }
       - run: npm ci --prefix pipeline --no-audit --no-fund
         env: { PUPPETEER_SKIP_DOWNLOAD: 'true' }
+      # the official injury report first (absences first, prices last, so the prices are the newest read); pdftotext reads
+      # the PDF. A failure here must not stop the price reads.
+      - run: sudo apt-get install -y -qq poppler-utils >/dev/null && node pipeline/nba-injury-read.js --r2
+        continue-on-error: true
       - run: node pipeline/vegas-nba-read.js --r2
       # a failure in one book must not hide the others; a Tippmix 403 fails that step only (stop there, do not route around it)
       - run: node pipeline/tippmix-nba-read.mjs --r2
