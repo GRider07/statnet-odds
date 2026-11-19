@@ -23,7 +23,7 @@ function rows(j, lad = new Map()) {
     const ms = e.marketIds.map((i) => mk.get(i)).filter(Boolean), w = ms.find((m) => m.typeId === 219);
     const hs = ms.filter((m) => m.typeId === 223), h = hs.find((m) => m.oddIds.some((i) => (od.get(i) || {}).isMB)) || hs[0];
     const [home, away] = e.name.split(' vs. ');
-    return [e.startDate.slice(5, 16), home, away, w ? px(w) : null, h ? [+h.sv, ...px(h)] : null, lad.get(e.id) || null];
+    return [e.startDate.slice(5, 16), home, away, w ? px(w) : null, h ? [+h.sv, ...px(h)] : null, lad.get(e.id) || null, e.id];   // e.id: vegas.hu/sports?page=event&sportId=67&eventId=
   });
 }
 
