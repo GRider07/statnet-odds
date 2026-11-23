@@ -70,7 +70,8 @@ if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}` || proc
   try {
     const leagues = await readIntl(), at = new Date().toISOString();
     console.log(Object.entries(leagues).map(([c, l]) => `${c} ${l.length}`).join(', '));
-    if (!Object.values(leagues).some((l) => l.length)) { console.error('FAILED: 0 games in all four leagues'); process.exit(2); }
+    // shortcut: 0 games everywhere is read as a break (see vegas-intl-read.js); nothing is written, so R2 keeps the last real read
+    if (!Object.values(leagues).some((l) => l.length)) { console.log('::warning::0 games in all four leagues (a league break, or Pro changed): nothing written'); process.exit(0); }
     fs.mkdirSync(OUT, { recursive: true });
     fs.writeFileSync(path.join(OUT, at.replace(/[:.]/g, '-') + '.json'), JSON.stringify({ at, leagues }));
     if (process.argv.includes('--r2')) await createRequire(import.meta.url)('./vegas-intl-read.js').toR2({ at, leagues }, 'odds/tippmix/intl');

@@ -55,7 +55,9 @@ if (require.main === module) (async () => {
   const { out: leagues, live } = await read(), at = new Date().toISOString();
   const total = Object.values(leagues).reduce((s, l) => s + l.length, 0);
   console.log(Object.entries(leagues).map(([c, l]) => `${c} ${l.length}`).join(', '));
-  if (!total) throw new Error('0 games parsed in all four leagues: the feed or its shape changed');   // parsers must scream on zero (an empty league alone can be an off-week)
+  // shortcut: 0 games everywhere is read as a break (FIBA windows pause all four leagues), so no failure mail every hour; a changed feed shape
+  // then looks the same, and nothing is written, so R2 keeps the last real read. Upgrade: fail when the schedule says a game is due.
+  if (!total) { console.log('::warning::0 games parsed in all four leagues (a league break, or the feed shape changed): nothing written'); return; }
   const snap = { at, leagues, live };
   fs.mkdirSync(OUT, { recursive: true });
   fs.writeFileSync(path.join(OUT, at.replace(/[:.]/g, '-') + '.json'), JSON.stringify(snap));
